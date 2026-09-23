@@ -2,7 +2,7 @@
 window.ChizuDiagram=window.ChizuDiagram||{};
 (() => {
 'use strict';
-const COLORS={up:'#be3438',down:'#285eba',hakuto:'#00a5d9',inaba:'#ddb900',other:'#252525'};
+const COLORS={up:'#252525',down:'#252525',ordinary:'#252525',hakuto:'#00a5d9',inaba:'#ddb900',other:'#252525'};
 const SERVICE={hakuto:'スーパーはくと',inaba:'スーパーいなば',ordinary:'普通',other:'その他'};
 function validate(d){
  if(d?.schemaVersion!==1||!Array.isArray(d.stations)||!Array.isArray(d.trains)||d.stations.length<2||d.trains.length<1)throw Error('対応するダイヤJSONではありません。');

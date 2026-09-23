@@ -3,7 +3,7 @@
 'use strict';
 function poseLabel(plan,coords){
  const a=coords[plan.segment],b=coords[plan.segment+1],dx=b[0]-a[0],dy=b[1]-a[1],len=Math.hypot(dx,dy)||1;
- const ux=dx/len,uy=dy/len,side=dy<0?-1:1;
+ const ux=dx/len,uy=dy/len,side=-1;
  return {x:a[0]+dx*plan.fraction-uy*side*plan.offset,y:a[1]+dy*plan.fraction+ux*side*plan.offset,
   angle:Math.atan2(dy,dx)*180/Math.PI,ux,uy,width:plan.width,height:plan.fontSize+2};
 }
@@ -30,7 +30,7 @@ function planLabels(data,{printMode=false,overrides={}}={}){
   const candidates=[];
   for(let i=0;i<coords.length-1;i++){
    if(coords[i][1]===coords[i+1][1])continue;
-   for(const fraction of [.3,.55,.8])for(const fontSize of [priority(t)?9:10,priority(t)?8:9]){
+   for(const fraction of [.3,.55,.8])for(const fontSize of [priority(t)?8:9.5,priority(t)?7.5:9]){
     const plan={segment:i,fraction,fontSize,offset:fontSize/2+3,width:t.id.length*fontSize*.64+2};candidates.push(plan);
    }
   }

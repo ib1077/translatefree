@@ -6,17 +6,17 @@ let nextId=0;
 function createViewer({svg,data:initialData,onSelect=()=>{},onViewChange=()=>{},width=0,height=0,printMode=false,labelOverrides=window.CHIZU_DIAGRAM_CONFIG?.labelOverrides||{}}){
  let data=validate(initialData),stationMap=new Map(data.stations.map(s=>[s.id,s]));
  let labelPlans=planLabels(data,{printMode,overrides:labelOverrides[printMode?'print':'screen']});
- let selected='',start=data.view.startSeconds,span=data.view.endSeconds-start,filters={up:true,down:true};
+ let selected='',start=18000,span=64800,filters={up:true,down:true};
  const clipId='chizu-plot-'+(++nextId),fixedWidth=width,fixedHeight=height;
  let geometry={},lastRender={},pickLines=[],pickLabels=[],frame=0,destroyed=false;
  const NS='http://www.w3.org/2000/svg';
  function el(tag,attrs={},text,parent=svg){const e=document.createElementNS(NS,tag);for(const [k,v] of Object.entries(attrs))e.setAttribute(k,v);if(text!==undefined)e.textContent=text;if(parent)parent.appendChild(e);return e}
  function schedule(){if(!frame&&!destroyed)frame=requestAnimationFrame(()=>{frame=0;draw()})}
- function bounds(){return {min:data.view.startSeconds,max:data.view.endSeconds,minSpan:Math.min(1200,data.view.endSeconds-data.view.startSeconds)}}
+ function bounds(){return {min:0,max:Math.max(86400,data.view.endSeconds),minSpan:printMode?60:21600}}
  function setRange(nextStart,nextSpan=span){const b=bounds();span=Math.min(b.max-b.min,Math.max(b.minSpan,nextSpan));start=Math.max(b.min,Math.min(b.max-span,nextStart));schedule();}
- function setData(next){data=validate(next);stationMap=new Map(data.stations.map(s=>[s.id,s]));labelPlans=planLabels(data,{printMode,overrides:labelOverrides[printMode?'print':'screen']});selected='';filters={up:true,down:true};start=data.view.startSeconds;span=data.view.endSeconds-start;schedule()}
+ function setData(next){data=validate(next);stationMap=new Map(data.stations.map(s=>[s.id,s]));labelPlans=planLabels(data,{printMode,overrides:labelOverrides[printMode?'print':'screen']});selected='';filters={up:true,down:true};start=18000;span=64800;schedule()}
  function zoom(factor,fraction=.5){const b=bounds(),next=Math.max(b.minSpan,Math.min(b.max-b.min,span/factor)),anchor=start+span*fraction;setRange(anchor-next*fraction,next)}
- function fit(){setRange(data.view.startSeconds,data.view.endSeconds-data.view.startSeconds)}
+ function fit(){setRange(18000,64800)}
  function select(id){const t=data.trains.find(t=>t.id===id);selected=t?id:'';if(t){filters[t.direction]=true;if(t.points.at(-1).seconds<start||t.points[0].seconds>start+span)setRange(t.points[0].seconds-span*.1)}schedule()}
  function point(clientX,clientY){const m=svg.getScreenCTM();if(!m)return {x:0,y:0};const p=new DOMPoint(clientX,clientY).matrixTransform(m.inverse());return {x:p.x,y:p.y}}
  function fraction(px){return Math.max(0,Math.min(1,(px-geometry.left)/geometry.pw))}
@@ -30,7 +30,7 @@ function createViewer({svg,data:initialData,onSelect=()=>{},onViewChange=()=>{},
 function draw(){
  const w=fixedWidth||svg.clientWidth,h=fixedHeight||svg.clientHeight;if(w<100||h<100)return;const left=w<500?66:76,right=18,top=28,bottom=16,pw=w-left-right,ph=h-top-bottom;geometry={w,h,left,right,top,bottom,pw,ph};
  svg.replaceChildren();svg.setAttribute('viewBox',`0 0 ${w} ${h}`);
- const end=Math.min(start+span,data.view.endSeconds),distances=data.stations.map(s=>s.km),lo=Math.min(...distances),hi=Math.max(...distances);
+ const end=Math.min(start+span,bounds().max),distances=data.stations.map(s=>s.km),lo=Math.min(...distances),hi=Math.max(...distances);
  const x=s=>left+(s-start)/(end-start)*pw,y=k=>top+(k-lo)/(hi-lo)*ph;
  el('title',{},`${data.title} ${clock(start)}–${clock(end)}。上郡側を上、智頭側を下に表示。`);
  const defs=el('defs');const cp=el('clipPath',{id:clipId},undefined,defs);el('rect',{x:left,y:top-2,width:pw,height:ph+4},undefined,cp);
@@ -64,7 +64,7 @@ function draw(){
  const labelGroup=el('g',{'clip-path':`url(#${clipId})`,'data-fixed-labels':''});
  let labelCount=0;
  for(const t of data.trains.filter(t=>filters[t.direction])){
-  const plan=labelPlans.get(t.id),coords=t.points.map(p=>[x(p.seconds),y(stationMap.get(p.station).km)]),box=poseLabel(plan,coords);
+  const basePlan=labelPlans.get(t.id),scale=printMode?1:Math.max(.9,Math.min(1.05,pw/900)),plan={...basePlan,fontSize:basePlan.fontSize*scale,offset:basePlan.offset*scale,width:basePlan.width*scale},coords=t.points.map(p=>[x(p.seconds),y(stationMap.get(p.station).km)]),box=poseLabel(plan,coords);
   const a=t.points[plan.segment],b=t.points[plan.segment+1];
   el('text',{x:0,y:0,transform:`translate(${box.x} ${box.y}) rotate(${box.angle})`,
    'text-anchor':'middle','dominant-baseline':'central',style:`font-size:${plan.fontSize}px`,class:'train-label','data-label':t.id,

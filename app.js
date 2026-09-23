@@ -12,11 +12,11 @@ function updateMetadata(){
  $('source-info').textContent=`${data.source?.file||'読み込みデータ'} ／ ${data.trains.length}列車・${data.stations.length}地点`;
  $('train').replaceChildren(option('','選択なし'));for(const t of data.trains)$('train').append(option(t.id,t.id));
  $('details').hidden=true;$('up').checked=true;$('down').checked=true;
- $('time-slider').min=data.view.startSeconds;$('move-start').textContent=clock(data.view.startSeconds);$('move-end').textContent=clock(data.view.endSeconds);
+ $('time-slider').min=0;$('move-start').textContent='0:00';$('move-end').textContent=clock(Math.max(86400,data.view.endSeconds));
 }
 function viewChanged(view){
  $('view-range').textContent=clock(view.start)+'–'+clock(view.end);$('grid-caption').textContent=view.gridMinutes+'分';
- $('time-slider').max=Math.max(data.view.startSeconds,data.view.endSeconds-view.span);$('time-slider').value=view.start;$('time-slider').disabled=view.span>=data.view.endSeconds-data.view.startSeconds-.01;
+ $('time-slider').max=Math.max(0,Math.max(86400,data.view.endSeconds)-view.span);$('time-slider').value=view.start;$('time-slider').disabled=view.span>=Math.max(86400,data.view.endSeconds)-.01;$('zoom-in').disabled=view.span<=21600.01;$('zoom-out').disabled=view.span>=Math.max(86400,data.view.endSeconds)-.01;
  window.diagramDebug={...view,active,rotated:document.body.classList.contains('fallback-landscape')};
  $('app-shell').dispatchEvent(new CustomEvent('chizu:viewportchange',{bubbles:true,detail:{startSeconds:view.start,endSeconds:view.end}}));
 }
@@ -39,9 +39,27 @@ function enter(){active=true;$('launch-screen').hidden=true;$('app-shell').hidde
 function home(){active=false;gestures.reset();closePanels();$('app-shell').hidden=true;$('launch-screen').hidden=false;document.body.classList.add('launch-waiting');orient();$('launch').focus({preventScroll:true})}
 function changeData(next){validate(next);gestures.reset();data=next;viewer.setData(data);updateMetadata();clearPrint();}
 function clearPrint(){for(const v of printViewers)v.destroy();printViewers=[];}
-function preparePrint(){
- clearPrint();for(const el of document.querySelectorAll('.print-edition'))el.textContent=edition();
- for(const id of ['print-chart-1','print-chart-2']){const v=createViewer({svg:$(id),data,width:1200,height:360,printMode:true});v.draw();printViewers.push(v)}
+function printSettings(report=true){
+ const parse=id=>{const raw=$(id).value.trim(),m=/^(\d{1,2}):([0-5]\d)$/.exec(raw),v=m?Number(m[1])*3600+Number(m[2])*60:NaN;return v>=0&&v<=86400?v:NaN};
+ for(const id of ['print-start','print-end','print-split'])$(id).setCustomValidity('');
+ const mode=$('print-mode').value,start=parse('print-start'),end=parse('print-end'),split=parse('print-split');
+ let invalid='',message='';
+ if(!Number.isFinite(start)){invalid='print-start';message='0:00〜24:00の時刻を入力してください。'}
+ else if(!Number.isFinite(end)||end<=start){invalid='print-end';message='開始より後、24:00までの時刻を入力してください。'}
+ else if(mode==='split'&&(!Number.isFinite(split)||split<=start||split>=end)){invalid='print-split';message='開始と終了の間の時刻を入力してください。'}
+ if(invalid){$(invalid).setCustomValidity(message);if(report)$(invalid).reportValidity();return null}
+ return {mode,start,end,split};
+}
+let lastPrintSettings={mode:'repeat',start:18000,end:82800,split:50400};
+function preparePrint(settings=lastPrintSettings){
+ lastPrintSettings=settings;clearPrint();const {mode,start,end,split}=settings;
+ const ranges=mode==='single'?[[start,end]]:mode==='split'?[[start,split],[split,end]]:[[start,end],[start,end]];
+ $('print-sheet').classList.toggle('single',mode==='single');$('print-chart-2').closest('.print-diagram').hidden=mode==='single';
+ $('print-summary').textContent='A4横・'+({repeat:'同じ範囲を上下2枚',split:'時間帯を上下に分割',single:'指定範囲を1枚'})[mode];
+ for(let i=0;i<ranges.length;i++){
+  const [a,b]=ranges[i],svg=$('print-chart-'+(i+1));svg.previousElementSibling.querySelector('.print-edition').textContent=edition()+'　'+clock(a)+'–'+clock(b);svg.setAttribute('aria-label','印刷用ダイヤ '+clock(a)+'–'+clock(b));
+  const v=createViewer({svg,data,width:1200,height:mode==='single'?740:360,printMode:true});v.setRange(a,b-a);v.draw();printViewers.push(v);
+ }
 }
 updateMetadata();viewer=createViewer({svg:$('chart'),data,onSelect:choose,onViewChange:viewChanged});
 gestures=attachGestures({surface:$('chart-wrap'),viewer,onTap:p=>{const id=viewer.pick(p);if(id)choose(id)}});
@@ -49,7 +67,7 @@ $('launch').onclick=enter;$('home').onclick=home;
 $('fit').onclick=()=>{gestures.stop();viewer.fit();closePanels()};
 $('move-open').onclick=()=>showPanel('move');$('train-open').onclick=()=>showPanel('train');
 for(const b of document.querySelectorAll('[data-close]'))b.onclick=()=>{$(b.dataset.close).hidden=true;$(b.dataset.close.replace('-panel','-open')).setAttribute('aria-expanded','false')};
-for(const b of document.querySelectorAll('[data-span]'))b.onclick=()=>{gestures.stop();const s=viewer.getState(),span=b.dataset.span==='all'?s.max-s.min:Math.min(Number(b.dataset.span),s.max-s.min);viewer.setRange(s.start+s.span/2-span/2,span)};
+for(const b of document.querySelectorAll('[data-span]'))b.onclick=()=>{gestures.stop();const s=viewer.getState();if(b.dataset.span==='standard'){viewer.fit();return}const span=b.dataset.span==='all'?s.max-s.min:Math.min(Number(b.dataset.span),s.max-s.min);viewer.setRange(s.start+s.span/2-span/2,span)};
 $('zoom-in').onclick=()=>{gestures.stop();viewer.zoom(1.5)};$('zoom-out').onclick=()=>{gestures.stop();viewer.zoom(1/1.5)};
 $('time-slider').oninput=()=>{gestures.stop();viewer.setRange(Number($('time-slider').value))};
 $('up').onchange=$('down').onchange=()=>viewer.setFilters({up:$('up').checked,down:$('down').checked});
@@ -58,10 +76,13 @@ $('menu-open').onclick=()=>{$('settings').showModal()};$('menu-close').onclick=(
 $('import-data').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{if(f.size>10000000)throw Error('ファイルが大きすぎます。');const next=validate(JSON.parse(await f.text()));changeData(next);try{localStorage.setItem(KEY,JSON.stringify(data));$('import-message').textContent='データを読み込み、この端末に保存しました。'}catch{$('import-message').textContent='読み込みました。この環境では保存できないため、次回は再度開いてください。'}}catch(err){$('import-message').textContent='読み込みできません：'+err.message}e.target.value=''};
 $('reset-data').onclick=()=>{try{localStorage.removeItem(KEY)}catch{}changeData(bundled);$('import-message').textContent='同梱データへ戻しました。'};
 $('export-data').onclick=()=>{const url=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'})),a=document.createElement('a');a.href=url;a.download='diagram-data.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)};
-$('print-preview').onclick=()=>{$('settings').close();$('print-preview-screen').hidden=false;preparePrint();$('print-back').focus()};
+$('print-mode').onchange=()=>{$('print-split-field').hidden=$('print-mode').value!=='split'};
+$('print-current').onclick=()=>{const s=viewer.getState();$('print-start').value=clock(s.start);$('print-end').value=clock(s.end);$('print-split').value=clock((s.start+s.end)/2)};
+$('print-preview').onclick=()=>{const settings=printSettings();if(!settings)return;$('settings').close();$('print-preview-screen').hidden=false;preparePrint(settings);$('print-back').focus()};
+$('print-edit').onclick=()=>{$('print-preview-screen').hidden=true;$('settings').showModal()};
 $('print-back').onclick=()=>{$('print-preview-screen').hidden=true;home();$('menu-open').focus()};
 $('print-now').onclick=()=>{preparePrint();window.print()};
-window.addEventListener('beforeprint',preparePrint);
+window.addEventListener('beforeprint',()=>preparePrint(printSettings(false)||lastPrintSettings));
 window.addEventListener('resize',orient);window.addEventListener('blur',()=>gestures.reset());
 document.addEventListener('visibilitychange',()=>{if(document.hidden)gestures.reset()});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&active){closePanels();gestures.stop()}});
