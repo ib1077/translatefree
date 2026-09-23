@@ -9,6 +9,7 @@
 | diagram-data.json | 元Excel①の時刻・距離・元セル。UI変更前と同じデータ |
 | diagram-core.js | データ検証、時刻表示、固定配色。画面や保存領域に依存しない |
 | diagram-view.js | 任意のSVGへ描画するcreateViewer。画面IDやlocalStorageに依存しない |
+| label-layout.js | 全日図でラベル位置を決定。表示範囲に依存しない配置計画と線に沿う角度 |
 | pan-zoom.js | viewerへドラッグ・ピンチ・慣性・ホイール操作を接続。回転したSVG座標も処理 |
 | app.js | タイトル、横向き表示、右側操作、DATA保存、印刷などこのアプリの画面構成 |
 | ui-config.js | 表示用の版・年月。元資料の適用日とは分離 |
@@ -17,7 +18,7 @@
 
 ## 別の画面に組み込む例
 
-`diagram-core.js`、`diagram-view.js`、`pan-zoom.js` と必要なCSSを読み込みます。`app.js` は読み込まず、統合側で画面遷移や保存を管理できます。SVGは実際の幅・高さを持つ要素にしてください。
+`diagram-core.js`、`label-layout.js`、`diagram-view.js`、`pan-zoom.js` の順と必要なCSSを読み込みます。`app.js` は読み込まず、統合側で画面遷移や保存を管理できます。SVGは実際の幅・高さを持つ要素にしてください。
 
 ```js
 const viewer = ChizuDiagram.createViewer({

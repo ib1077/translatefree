@@ -7,7 +7,7 @@ ROOT=Path(__file__).resolve().parent.parent
 def build(standalone):
  data=json.loads((ROOT/'diagram-data.json').read_text(encoding='utf-8'))
  packed=json.dumps(data,ensure_ascii=False,separators=(',',':')).replace('<','\\u003c')
- scripts=['ui-config.js','diagram-core.js','diagram-view.js','pan-zoom.js','app.js']
+ scripts=['ui-config.js','diagram-core.js','label-layout.js','diagram-view.js','pan-zoom.js','app.js']
  template=(ROOT/'index.template.html').read_text(encoding='utf-8');css=(ROOT/'styles.css').read_text(encoding='utf-8');js='\n'.join((ROOT/name).read_text(encoding='utf-8') for name in scripts)
  single=template.replace('__DATA__',packed).replace('<!-- STYLE -->','<style>'+css+'</style>').replace('<!-- APP -->','<script>'+js+'</script>').replace('<!-- MANIFEST -->','').replace('<!-- REGISTER -->','')
  Path(standalone).write_text(single,encoding='utf-8')

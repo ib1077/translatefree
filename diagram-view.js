@@ -1,10 +1,11 @@
 /* A mountable diagram viewer: no document IDs, storage or navigation. */
 (() => {
 'use strict';
-const {COLORS,SERVICE,validate,clock,ink}=window.ChizuDiagram;
+const {COLORS,SERVICE,validate,clock,ink,planLabels,poseLabel}=window.ChizuDiagram;
 let nextId=0;
-function createViewer({svg,data:initialData,onSelect=()=>{},onViewChange=()=>{},width=0,height=0,printMode=false}){
+function createViewer({svg,data:initialData,onSelect=()=>{},onViewChange=()=>{},width=0,height=0,printMode=false,labelOverrides=window.CHIZU_DIAGRAM_CONFIG?.labelOverrides||{}}){
  let data=validate(initialData),stationMap=new Map(data.stations.map(s=>[s.id,s]));
+ let labelPlans=planLabels(data,{printMode,overrides:labelOverrides[printMode?'print':'screen']});
  let selected='',start=data.view.startSeconds,span=data.view.endSeconds-start,filters={up:true,down:true};
  const clipId='chizu-plot-'+(++nextId),fixedWidth=width,fixedHeight=height;
  let geometry={},lastRender={},pickLines=[],pickLabels=[],frame=0,destroyed=false;
@@ -13,15 +14,15 @@ function createViewer({svg,data:initialData,onSelect=()=>{},onViewChange=()=>{},
  function schedule(){if(!frame&&!destroyed)frame=requestAnimationFrame(()=>{frame=0;draw()})}
  function bounds(){return {min:data.view.startSeconds,max:data.view.endSeconds,minSpan:Math.min(1200,data.view.endSeconds-data.view.startSeconds)}}
  function setRange(nextStart,nextSpan=span){const b=bounds();span=Math.min(b.max-b.min,Math.max(b.minSpan,nextSpan));start=Math.max(b.min,Math.min(b.max-span,nextStart));schedule();}
- function setData(next){data=validate(next);stationMap=new Map(data.stations.map(s=>[s.id,s]));selected='';filters={up:true,down:true};start=data.view.startSeconds;span=data.view.endSeconds-start;schedule()}
+ function setData(next){data=validate(next);stationMap=new Map(data.stations.map(s=>[s.id,s]));labelPlans=planLabels(data,{printMode,overrides:labelOverrides[printMode?'print':'screen']});selected='';filters={up:true,down:true};start=data.view.startSeconds;span=data.view.endSeconds-start;schedule()}
  function zoom(factor,fraction=.5){const b=bounds(),next=Math.max(b.minSpan,Math.min(b.max-b.min,span/factor)),anchor=start+span*fraction;setRange(anchor-next*fraction,next)}
  function fit(){setRange(data.view.startSeconds,data.view.endSeconds-data.view.startSeconds)}
  function select(id){const t=data.trains.find(t=>t.id===id);selected=t?id:'';if(t){filters[t.direction]=true;if(t.points.at(-1).seconds<start||t.points[0].seconds>start+span)setRange(t.points[0].seconds-span*.1)}schedule()}
  function point(clientX,clientY){const m=svg.getScreenCTM();if(!m)return {x:0,y:0};const p=new DOMPoint(clientX,clientY).matrixTransform(m.inverse());return {x:p.x,y:p.y}}
  function fraction(px){return Math.max(0,Math.min(1,(px-geometry.left)/geometry.pw))}
  function pick(p){
-  for(const label of pickLabels){const [x,y,w,h]=label.rect;if(p.x>=x-3&&p.x<=x+w+3&&p.y>=y-3&&p.y<=y+h+3)return label.id;}
   if(p.x<geometry.left||p.x>geometry.w-geometry.right||p.y<geometry.top||p.y>geometry.h-geometry.bottom)return '';
+  for(const label of pickLabels){const b=label.box,dx=p.x-b.x,dy=p.y-b.y;if(Math.abs(dx*b.ux+dy*b.uy)<=b.width/2+3&&Math.abs(-dx*b.uy+dy*b.ux)<=b.height/2+3)return label.id;}
   let id='',best=10;
   for(const line of pickLines)for(let i=1;i<line.coords.length;i++){const [ax,ay]=line.coords[i-1],[bx,by]=line.coords[i],dx=bx-ax,dy=by-ay,len=dx*dx+dy*dy,f=len?Math.max(0,Math.min(1,((p.x-ax)*dx+(p.y-ay)*dy)/len)):0;const distance=Math.hypot(p.x-ax-f*dx,p.y-ay-f*dy);if(distance<best){best=distance;id=line.id}}
   return id;
@@ -48,7 +49,7 @@ function draw(){
 
  const visible=data.trains.filter(t=>filters[t.direction]&&t.points[0].seconds<=end&&t.points.at(-1).seconds>=start);
  pickLines=[];pickLabels=[];
- const lines=el('g',{'clip-path':`url(#${clipId})`}),labels=[],boxes=[];
+ const lines=el('g',{'clip-path':`url(#${clipId})`});
  for(const t of visible){
   const coords=t.points.map(p=>[x(p.seconds),y(stationMap.get(p.station).km)]),points=coords.map(p=>p.join(',')).join(' '),isSelected=t.id===selected;
   pickLines.push({id:t.id,coords});
@@ -57,20 +58,23 @@ function draw(){
   el('title',{},`${t.id} ${SERVICE[t.service]} ${clock(t.points[0].seconds)}–${clock(t.points.at(-1).seconds)}`,path);
   const hit=el('polyline',{points,class:'hit-line',tabindex:0,role:'button','aria-label':t.id+' の時刻を表示'},undefined,group);
   hit.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();onSelect(t.id)}});
-  const candidates=[];
-  for(let i=0;i<coords.length-1;i++){
-   const a=coords[i],b=coords[i+1];if(b[0]<left||a[0]>w-right)continue;
-   for(const f of [.2,.5,.8]){const px=a[0]+(b[0]-a[0])*f,py=a[1]+(b[1]-a[1])*f;if(px<left||px>w-right)continue;for(const offset of [-7,14])candidates.push([px+3,py+offset]);}
-  }
-  if(!candidates.length)candidates.push([Math.min(w-right-40,Math.max(left+3,coords[0][0])),Math.min(h-bottom-4,Math.max(top+12,coords[0][1]))]);
-  labels.push({t,candidates});
  }
- for(const {t,candidates} of labels){
-  const tw=t.id.length*7+7,th=14;let best,score=Infinity;
-  for(const [cx,cy] of candidates){const bx=Math.min(w-right-tw,Math.max(left+2,cx)),by=Math.min(h-bottom-3,Math.max(top+12,cy));const rect=[bx,by-th,tw,th];const overlaps=boxes.reduce((sum,b)=>sum+(rect[0]<b[0]+b[2]+4&&rect[0]+tw+4>b[0]&&rect[1]<b[1]+b[3]+3&&rect[1]+th+3>b[1]?1:0),0);if(overlaps<score){score=overlaps;best=rect}if(!overlaps)break;}
-  boxes.push(best);const label=el('text',{x:best[0],y:best[1]+th-2,class:'train-label','data-label':t.id,opacity:selected&&selected!==t.id?.2:1},t.id);pickLabels.push({id:t.id,rect:best});
+ // All labels retain their full-day anchor, including those outside the viewport.
+ // Clipping hides them; neither panning nor filtering can pick another segment.
+ const labelGroup=el('g',{'clip-path':`url(#${clipId})`,'data-fixed-labels':''});
+ let labelCount=0;
+ for(const t of data.trains.filter(t=>filters[t.direction])){
+  const plan=labelPlans.get(t.id),coords=t.points.map(p=>[x(p.seconds),y(stationMap.get(p.station).km)]),box=poseLabel(plan,coords);
+  const a=t.points[plan.segment],b=t.points[plan.segment+1];
+  el('text',{x:0,y:0,transform:`translate(${box.x} ${box.y}) rotate(${box.angle})`,
+   'text-anchor':'middle','dominant-baseline':'central',style:`font-size:${plan.fontSize}px`,class:'train-label','data-label':t.id,
+   'data-anchor-seconds':a.seconds+(b.seconds-a.seconds)*plan.fraction,
+   'data-anchor-km':stationMap.get(a.station).km+(stationMap.get(b.station).km-stationMap.get(a.station).km)*plan.fraction,
+   'data-segment':plan.segment,'data-fraction':plan.fraction,
+   opacity:selected&&selected!==t.id?.2:1},t.id,labelGroup);
+  pickLabels.push({id:t.id,box});labelCount++;
  }
- lastRender={trainCount:data.trains.length,visibleCount:visible.length,labelCount:labels.length,start,end,span,gridMinutes,colors:COLORS,selected};
+ lastRender={trainCount:data.trains.length,visibleCount:visible.length,labelCount,start,end,span,gridMinutes,colors:COLORS,selected};
  onViewChange({...lastRender});
 }
  const observer=new ResizeObserver(schedule);observer.observe(svg);schedule();
