@@ -11,7 +11,7 @@ function updateMetadata(){
  $('edition').textContent=edition();document.querySelector('.version').textContent='ver.'+config.version;
  $('source-info').textContent=`${data.source?.file||'読み込みデータ'} ／ ${data.trains.length}列車・${data.stations.length}地点`;
  $('train').replaceChildren(option('','選択なし'));for(const t of data.trains)$('train').append(option(t.id,t.id));
- $('details').hidden=true;$('up').checked=true;$('down').checked=true;
+ $('detail-panel').hidden=true;$('up').checked=true;$('down').checked=true;
  $('time-slider').min=0;$('move-start').textContent='0:00';$('move-end').textContent=clock(Math.max(86400,data.view.endSeconds));
 }
 function viewChanged(view){
@@ -20,13 +20,24 @@ function viewChanged(view){
  $('app-shell').dispatchEvent(new CustomEvent('chizu:viewportchange',{bubbles:true,detail:{startSeconds:view.start,endSeconds:view.end}}));
 }
 function closePanels(){for(const id of ['move','train']){$(id+'-panel').hidden=true;$(id+'-open').setAttribute('aria-expanded','false')}}
-function showPanel(kind){gestures.stop();const show=$(kind+'-panel').hidden;closePanels();if(show){$(kind+'-panel').hidden=false;$(kind+'-open').setAttribute('aria-expanded','true')}}
+function showPanel(kind){gestures.stop();const show=$(kind+'-panel').hidden;choose('');closePanels();if(show){$(kind+'-panel').hidden=false;$(kind+'-open').setAttribute('aria-expanded','true')}}
 function choose(id){
- const t=data.trains.find(t=>t.id===id);gestures.stop();viewer.select(id);$('train').value=t?id:'';$('details').hidden=!t;
- if(t){$(t.direction).checked=true;$('move-panel').hidden=true;$('move-open').setAttribute('aria-expanded','false');$('train-panel').hidden=false;$('train-open').setAttribute('aria-expanded','true');
-  $('detail-title').textContent=`${t.id}　${SERVICE[t.service]}　${t.direction==='up'?'上り':'下り'}`;$('detail-body').replaceChildren();
-  const rows=[];for(const p of t.points){let row=rows.at(-1);if(!row||row.station!==p.station){row={station:p.station,arrival:'—',departure:'—'};rows.push(row)}if(p.event==='着'||(p.event===''&&t.points.some(q=>q.station===p.station&&q.event==='発')))row.arrival=clock(p.seconds,true);else row.departure=clock(p.seconds,true)}
-  for(const row of rows){const tr=document.createElement('tr');for(const text of [row.station,row.arrival,row.departure]){const td=document.createElement('td');td.textContent=text;tr.append(td)}$('detail-body').append(tr)}
+ const t=data.trains.find(t=>t.id===id);gestures.stop();viewer.select(id);$('train').value=t?id:'';$('detail-panel').hidden=!t;
+ if(t){
+  $(t.direction).checked=true;closePanels();
+  $('detail-title').textContent=`${t.id} ${SERVICE[t.service]}・${t.direction==='up'?'上り':'下り'}`;
+  const stationName=id=>id==='岩木'?'（岩木信号所）':(data.stations.find(s=>s.id===id)?.name||id);
+  const last=t.points.at(-1);$('detail-arrival').textContent=`${stationName(last.station)} ${clock(last.seconds,true)}${last.event||'（着発区分空欄）'}`;
+  $('detail-body').replaceChildren();
+  const rows=[];for(const p of t.points){let row=rows.at(-1);if(!row||row.station!==p.station){row={station:p.station,arrival:[],departure:[],unknown:[]};rows.push(row)}row[p.event==='着'?'arrival':p.event==='発'?'departure':'unknown'].push(p)}
+  function stamp(p,parent){const e=document.createElement('span');e.className='event-time';e.dataset.seconds=p.seconds;e.dataset.event=p.event;e.dataset.source=p.sourceCell||'';e.textContent=clock(p.seconds,true);e.title=p.sourceCell?'元セル '+p.sourceCell:'';parent.append(e)}
+  for(const row of rows){
+   const tr=document.createElement('tr');if(['上郡','佐用','大原','智頭'].includes(row.station))tr.className='major-station';
+   const name=document.createElement('th');name.scope='row';name.textContent=stationName(row.station);tr.append(name);
+   for(const kind of ['arrival','departure']){const td=document.createElement('td');if(!row[kind].length)td.textContent='—';for(const p of row[kind])stamp(p,td);tr.append(td)}$('detail-body').append(tr);
+   for(const p of row.unknown){const extra=document.createElement('tr'),td=document.createElement('td');td.colSpan=3;td.className='unknown-event';td.append(stationName(row.station)+' ');stamp(p,td);td.append('（着発区分空欄）');extra.append(td);$('detail-body').append(extra)}
+  }
+  $('detail-scroll').scrollTop=0;
  }
  $('app-shell').dispatchEvent(new CustomEvent('chizu:trainselect',{bubbles:true,detail:t?{trainId:t.id,direction:t.direction}:null}));
 }
@@ -35,7 +46,7 @@ function orient(){
  document.body.classList.toggle('fallback-landscape',active&&portrait&&phone);gestures?.reset();viewer?.schedule();
 }
 function enter(){active=true;$('launch-screen').hidden=true;$('app-shell').hidden=false;document.body.classList.remove('launch-waiting');orient();viewer.draw();$('chart').focus({preventScroll:true})}
-function home(){active=false;gestures.reset();closePanels();$('app-shell').hidden=true;$('launch-screen').hidden=false;document.body.classList.add('launch-waiting');orient();$('launch').focus({preventScroll:true})}
+function home(){choose('');active=false;gestures.reset();closePanels();$('app-shell').hidden=true;$('launch-screen').hidden=false;document.body.classList.add('launch-waiting');orient();$('launch').focus({preventScroll:true})}
 function changeData(next){validate(next);gestures.reset();data=next;viewer.setData(data);updateMetadata();clearPrint();}
 function clearPrint(){for(const v of printViewers)v.destroy();printViewers=[];}
 function printSettings(report=true){
@@ -61,7 +72,7 @@ function preparePrint(settings=lastPrintSettings){
  }
 }
 updateMetadata();viewer=createViewer({svg:$('chart'),data,onSelect:choose,onViewChange:viewChanged});
-gestures=attachGestures({surface:$('chart-wrap'),viewer,onTap:p=>{const id=viewer.pick(p);if(id)choose(id)}});
+gestures=attachGestures({surface:$('chart-wrap'),viewer,onTap:p=>{const id=viewer.pick(p);choose(id)}});
 $('launch').onclick=enter;$('home').onclick=home;
 $('fit').onclick=()=>{gestures.stop();viewer.fit();closePanels()};
 $('move-open').onclick=()=>showPanel('move');$('train-open').onclick=()=>showPanel('train');
@@ -84,7 +95,7 @@ $('print-now').onclick=()=>{preparePrint();window.print()};
 window.addEventListener('beforeprint',()=>preparePrint(printSettings(false)||lastPrintSettings));
 window.addEventListener('resize',orient);window.addEventListener('blur',()=>gestures.reset());
 document.addEventListener('visibilitychange',()=>{if(document.hidden)gestures.reset()});
-document.addEventListener('keydown',e=>{if(e.key==='Escape'&&active){closePanels();gestures.stop()}});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&active){choose('');closePanels();gestures.stop()}});
 document.addEventListener('pointerdown',e=>{if(!$('chart-wrap').contains(e.target))gestures.stop()},{capture:true});
 if(location.protocol==='file:')$('offline-status').textContent='単独HTMLとして通信なしで利用できます。';
 else if(!window.PWA_BUILD)$('offline-status').textContent='単独HTML版です。ファイルを保存すれば通信なしで開けます。';
