@@ -15,7 +15,6 @@ function updateMetadata(){
  $('time-slider').min=0;$('move-start').textContent='0:00';$('move-end').textContent=clock(Math.max(86400,data.view.endSeconds));
 }
 function viewChanged(view){
- $('view-range').textContent=clock(view.start)+'–'+clock(view.end);$('grid-caption').textContent=view.gridMinutes+'分';
  $('time-slider').max=Math.max(0,Math.max(86400,data.view.endSeconds)-view.span);$('time-slider').value=view.start;$('time-slider').disabled=view.span>=Math.max(86400,data.view.endSeconds)-.01;$('zoom-in').disabled=view.span<=21600.01;$('zoom-out').disabled=view.span>=Math.max(86400,data.view.endSeconds)-.01;
  window.diagramDebug={...view,active,rotated:document.body.classList.contains('fallback-landscape')};
  $('app-shell').dispatchEvent(new CustomEvent('chizu:viewportchange',{bubbles:true,detail:{startSeconds:view.start,endSeconds:view.end}}));
@@ -67,7 +66,7 @@ $('launch').onclick=enter;$('home').onclick=home;
 $('fit').onclick=()=>{gestures.stop();viewer.fit();closePanels()};
 $('move-open').onclick=()=>showPanel('move');$('train-open').onclick=()=>showPanel('train');
 for(const b of document.querySelectorAll('[data-close]'))b.onclick=()=>{$(b.dataset.close).hidden=true;$(b.dataset.close.replace('-panel','-open')).setAttribute('aria-expanded','false')};
-for(const b of document.querySelectorAll('[data-span]'))b.onclick=()=>{gestures.stop();const s=viewer.getState();if(b.dataset.span==='standard'){viewer.fit();return}const span=b.dataset.span==='all'?s.max-s.min:Math.min(Number(b.dataset.span),s.max-s.min);viewer.setRange(s.start+s.span/2-span/2,span)};
+for(const b of document.querySelectorAll('[data-span]'))b.onclick=()=>{gestures.stop();const s=viewer.getState();if(b.dataset.span==='standard'){viewer.setRange(18000,64800);return}const span=b.dataset.span==='all'?s.max-s.min:Math.min(Number(b.dataset.span),s.max-s.min);viewer.setRange(s.start+s.span/2-span/2,span)};
 $('zoom-in').onclick=()=>{gestures.stop();viewer.zoom(1.5)};$('zoom-out').onclick=()=>{gestures.stop();viewer.zoom(1/1.5)};
 $('time-slider').oninput=()=>{gestures.stop();viewer.setRange(Number($('time-slider').value))};
 $('up').onchange=$('down').onchange=()=>viewer.setFilters({up:$('up').checked,down:$('down').checked});

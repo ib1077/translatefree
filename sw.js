@@ -1,5 +1,5 @@
 const PREFIX='chizu-diagram-'+encodeURIComponent(self.registration.scope)+'-';
-const CACHE=PREFIX+'355e49a9c2c04050';
+const CACHE=PREFIX+'944871525532e204';
 const ASSETS=["./", "./index.html", "./styles.css", "./ui-config.js", "./diagram-core.js", "./label-layout.js", "./diagram-view.js", "./pan-zoom.js", "./app.js", "./data.js", "./register.js", "./manifest.webmanifest", "./icons/icon-192.png", "./icons/icon-512.png"];
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(ASSETS)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith(PREFIX)&&k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));

@@ -6,7 +6,7 @@ let nextId=0;
 function createViewer({svg,data:initialData,onSelect=()=>{},onViewChange=()=>{},width=0,height=0,printMode=false,labelOverrides=window.CHIZU_DIAGRAM_CONFIG?.labelOverrides||{}}){
  let data=validate(initialData),stationMap=new Map(data.stations.map(s=>[s.id,s]));
  let labelPlans=planLabels(data,{printMode,overrides:labelOverrides[printMode?'print':'screen']});
- let selected='',start=18000,span=64800,filters={up:true,down:true};
+ let selected='',start=28800,span=43200,filters={up:true,down:true};
  const clipId='chizu-plot-'+(++nextId),fixedWidth=width,fixedHeight=height;
  let geometry={},lastRender={},pickLines=[],pickLabels=[],frame=0,destroyed=false;
  const NS='http://www.w3.org/2000/svg';
@@ -14,9 +14,9 @@ function createViewer({svg,data:initialData,onSelect=()=>{},onViewChange=()=>{},
  function schedule(){if(!frame&&!destroyed)frame=requestAnimationFrame(()=>{frame=0;draw()})}
  function bounds(){return {min:0,max:Math.max(86400,data.view.endSeconds),minSpan:printMode?60:21600}}
  function setRange(nextStart,nextSpan=span){const b=bounds();span=Math.min(b.max-b.min,Math.max(b.minSpan,nextSpan));start=Math.max(b.min,Math.min(b.max-span,nextStart));schedule();}
- function setData(next){data=validate(next);stationMap=new Map(data.stations.map(s=>[s.id,s]));labelPlans=planLabels(data,{printMode,overrides:labelOverrides[printMode?'print':'screen']});selected='';filters={up:true,down:true};start=18000;span=64800;schedule()}
+ function setData(next){data=validate(next);stationMap=new Map(data.stations.map(s=>[s.id,s]));labelPlans=planLabels(data,{printMode,overrides:labelOverrides[printMode?'print':'screen']});selected='';filters={up:true,down:true};start=28800;span=43200;schedule()}
  function zoom(factor,fraction=.5){const b=bounds(),next=Math.max(b.minSpan,Math.min(b.max-b.min,span/factor)),anchor=start+span*fraction;setRange(anchor-next*fraction,next)}
- function fit(){setRange(18000,64800)}
+ function fit(){setRange(28800,43200)}
  function select(id){const t=data.trains.find(t=>t.id===id);selected=t?id:'';if(t){filters[t.direction]=true;if(t.points.at(-1).seconds<start||t.points[0].seconds>start+span)setRange(t.points[0].seconds-span*.1)}schedule()}
  function point(clientX,clientY){const m=svg.getScreenCTM();if(!m)return {x:0,y:0};const p=new DOMPoint(clientX,clientY).matrixTransform(m.inverse());return {x:p.x,y:p.y}}
  function fraction(px){return Math.max(0,Math.min(1,(px-geometry.left)/geometry.pw))}
@@ -28,16 +28,16 @@ function createViewer({svg,data:initialData,onSelect=()=>{},onViewChange=()=>{},
   return id;
  }
 function draw(){
- const w=fixedWidth||svg.clientWidth,h=fixedHeight||svg.clientHeight;if(w<100||h<100)return;const left=w<500?66:76,right=18,top=28,bottom=16,pw=w-left-right,ph=h-top-bottom;geometry={w,h,left,right,top,bottom,pw,ph};
+ const w=fixedWidth||svg.clientWidth,h=fixedHeight||svg.clientHeight;if(w<100||h<100)return;const left=w<500?66:76,right=18,top=22,bottom=22,pw=w-left-right,ph=h-top-bottom;geometry={w,h,left,right,top,bottom,pw,ph};
  svg.replaceChildren();svg.setAttribute('viewBox',`0 0 ${w} ${h}`);
  const end=Math.min(start+span,bounds().max),distances=data.stations.map(s=>s.km),lo=Math.min(...distances),hi=Math.max(...distances);
  const x=s=>left+(s-start)/(end-start)*pw,y=k=>top+(k-lo)/(hi-lo)*ph;
  el('title',{},`${data.title} ${clock(start)}–${clock(end)}。上郡側を上、智頭側を下に表示。`);
  const defs=el('defs');const cp=el('clipPath',{id:clipId},undefined,defs);el('rect',{x:left,y:top-2,width:pw,height:ph+4},undefined,cp);
  const gridMinutes=printMode?10:(120*pw/span>=8?2:10),step=gridMinutes*60;
- const labelStep=[600,1800,3600,7200,10800,21600].find(s=>s*pw/span>=48)||21600;
+ const labelStep=(printMode&&span<21600?[600,1800,3600,7200]:[3600,7200,10800,21600]).find(s=>s*pw/span>=24)||21600;
  for(let s=Math.ceil(start/step)*step;s<=end+0.0001;s+=step){const hourly=s%3600===0,ten=s%600===0;el('line',{x1:x(s),y1:top,x2:x(s),y2:h-bottom,class:hourly?'hour-line':ten?(gridMinutes===2?'detail-ten-line':'ten-line'):'two-line','data-grid-seconds':s});}
- for(let s=Math.ceil(start/labelStep)*labelStep;s<=end;s+=labelStep)el('text',{x:x(s),y:17,'text-anchor':'middle',class:'axis-label'},clock(s));
+ for(let s=Math.ceil(start/labelStep)*labelStep;s<=end;s+=labelStep){const label=s%3600===0?String(s/3600):clock(s);for(const [side,ay] of [['top',14],['bottom',h-7]])el('text',{x:x(s),y:ay,'text-anchor':'middle',class:'axis-label','data-axis':side,'data-hour':s/3600},label);}
  // Keep true distance coordinates. Small station-name collisions are offset only in the label margin.
  let lastLabel=-100;
  for(const s of [...data.stations].sort((a,b)=>a.km-b.km)){
@@ -54,7 +54,7 @@ function draw(){
   const coords=t.points.map(p=>[x(p.seconds),y(stationMap.get(p.station).km)]),points=coords.map(p=>p.join(',')).join(' '),isSelected=t.id===selected;
   pickLines.push({id:t.id,coords});
   const group=el('g',{'data-train':t.id,opacity:selected&&!isSelected?.19:1},undefined,lines);
-  const path=el('polyline',{points,fill:'none',stroke:ink(t),'stroke-width':isSelected?3.3:['hakuto','inaba'].includes(t.service)?2.15:1.25,'stroke-linejoin':'round','stroke-linecap':'round',class:'train-line'},undefined,group);
+  const path=el('polyline',{points,fill:'none',stroke:ink(t),'stroke-width':isSelected?3.3:['hakuto','inaba'].includes(t.service)?2.15:t.service==='ordinary'?.95:1.25,'stroke-linejoin':'round','stroke-linecap':'round',class:'train-line'},undefined,group);
   el('title',{},`${t.id} ${SERVICE[t.service]} ${clock(t.points[0].seconds)}–${clock(t.points.at(-1).seconds)}`,path);
   const hit=el('polyline',{points,class:'hit-line',tabindex:0,role:'button','aria-label':t.id+' の時刻を表示'},undefined,group);
   hit.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();onSelect(t.id)}});
