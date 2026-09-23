@@ -6,7 +6,7 @@ let nextId=0;
 function createViewer({svg,data:initialData,onSelect=()=>{},onViewChange=()=>{},width=0,height=0,printMode=false,labelOverrides=window.CHIZU_DIAGRAM_CONFIG?.labelOverrides||{}}){
  let data=validate(initialData),stationMap=new Map(data.stations.map(s=>[s.id,s]));
  let labelPlans=planLabels(data,{printMode,overrides:labelOverrides[printMode?'print':'screen']});
- let selected='',start=28800,span=43200,filters={up:true,down:true};
+ let selected='',start=36000,span=28800,filters={up:true,down:true};
  const clipId='chizu-plot-'+(++nextId),fixedWidth=width,fixedHeight=height;
  let geometry={},lastRender={},pickLines=[],pickLabels=[],frame=0,destroyed=false;
  const NS='http://www.w3.org/2000/svg';
@@ -14,9 +14,9 @@ function createViewer({svg,data:initialData,onSelect=()=>{},onViewChange=()=>{},
  function schedule(){if(!frame&&!destroyed)frame=requestAnimationFrame(()=>{frame=0;draw()})}
  function bounds(){return {min:0,max:Math.max(86400,data.view.endSeconds),minSpan:printMode?60:21600}}
  function setRange(nextStart,nextSpan=span){const b=bounds();span=Math.min(b.max-b.min,Math.max(b.minSpan,nextSpan));start=Math.max(b.min,Math.min(b.max-span,nextStart));schedule();}
- function setData(next){data=validate(next);stationMap=new Map(data.stations.map(s=>[s.id,s]));labelPlans=planLabels(data,{printMode,overrides:labelOverrides[printMode?'print':'screen']});selected='';filters={up:true,down:true};start=28800;span=43200;schedule()}
+ function setData(next){data=validate(next);stationMap=new Map(data.stations.map(s=>[s.id,s]));labelPlans=planLabels(data,{printMode,overrides:labelOverrides[printMode?'print':'screen']});selected='';filters={up:true,down:true};start=36000;span=28800;schedule()}
  function zoom(factor,fraction=.5){const b=bounds(),next=Math.max(b.minSpan,Math.min(b.max-b.min,span/factor)),anchor=start+span*fraction;setRange(anchor-next*fraction,next)}
- function fit(){setRange(28800,43200)}
+ function fit(){setRange(36000,28800)}
  function select(id){const t=data.trains.find(t=>t.id===id);selected=t?id:'';if(t){filters[t.direction]=true;if(t.points.at(-1).seconds<start||t.points[0].seconds>start+span)setRange(t.points[0].seconds-span*.1)}schedule()}
  function point(clientX,clientY){const m=svg.getScreenCTM();if(!m)return {x:0,y:0};const p=new DOMPoint(clientX,clientY).matrixTransform(m.inverse());return {x:p.x,y:p.y}}
  function fraction(px){return Math.max(0,Math.min(1,(px-geometry.left)/geometry.pw))}

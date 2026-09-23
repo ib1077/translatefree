@@ -27,7 +27,6 @@ function choose(id){
   $(t.direction).checked=true;closePanels();
   $('detail-title').textContent=`${t.id} ${SERVICE[t.service]}・${t.direction==='up'?'上り':'下り'}`;
   const stationName=id=>id==='岩木'?'（岩木信号所）':(data.stations.find(s=>s.id===id)?.name||id);
-  const last=t.points.at(-1);$('detail-arrival').textContent=`${stationName(last.station)} ${clock(last.seconds,true)}${last.event||'（着発区分空欄）'}`;
   $('detail-body').replaceChildren();
   const rows=[];for(const p of t.points){let row=rows.at(-1);if(!row||row.station!==p.station){row={station:p.station,arrival:[],departure:[],unknown:[]};rows.push(row)}row[p.event==='着'?'arrival':p.event==='発'?'departure':'unknown'].push(p)}
   function stamp(p,parent){const e=document.createElement('span');e.className='event-time';e.dataset.seconds=p.seconds;e.dataset.event=p.event;e.dataset.source=p.sourceCell||'';e.textContent=clock(p.seconds,true);e.title=p.sourceCell?'元セル '+p.sourceCell:'';parent.append(e)}
@@ -67,14 +66,14 @@ function preparePrint(settings=lastPrintSettings){
  $('print-sheet').classList.toggle('single',mode==='single');$('print-chart-2').closest('.print-diagram').hidden=mode==='single';
  $('print-summary').textContent='A4横・'+({repeat:'同じ範囲を上下2枚',split:'時間帯を上下に分割',single:'指定範囲を1枚'})[mode];
  for(let i=0;i<ranges.length;i++){
-  const [a,b]=ranges[i],svg=$('print-chart-'+(i+1));svg.previousElementSibling.querySelector('.print-edition').textContent=edition()+'　'+clock(a)+'–'+clock(b);svg.setAttribute('aria-label','印刷用ダイヤ '+clock(a)+'–'+clock(b));
-  const v=createViewer({svg,data,width:1200,height:mode==='single'?740:360,printMode:true});v.setRange(a,b-a);v.draw();printViewers.push(v);
+  const [a,b]=ranges[i],svg=$('print-chart-'+(i+1));svg.setAttribute('aria-label','印刷用ダイヤ '+clock(a)+'–'+clock(b));
+  const v=createViewer({svg,data,width:1200,height:mode==='single'?820:400,printMode:true});v.setRange(a,b-a);v.draw();printViewers.push(v);
  }
 }
 updateMetadata();viewer=createViewer({svg:$('chart'),data,onSelect:choose,onViewChange:viewChanged});
-gestures=attachGestures({surface:$('chart-wrap'),viewer,onTap:p=>{const id=viewer.pick(p);choose(id)}});
+gestures=attachGestures({surface:$('chart-wrap'),viewer,onTap:p=>{const id=viewer.pick(p),selected=viewer.getState().selected;choose(selected&&id!==selected?'':id)}});
 $('launch').onclick=enter;$('home').onclick=home;
-$('fit').onclick=()=>{gestures.stop();viewer.fit();closePanels()};
+$('fit').onclick=()=>{choose('');gestures.stop();viewer.fit();closePanels()};
 $('move-open').onclick=()=>showPanel('move');$('train-open').onclick=()=>showPanel('train');
 for(const b of document.querySelectorAll('[data-close]'))b.onclick=()=>{$(b.dataset.close).hidden=true;$(b.dataset.close.replace('-panel','-open')).setAttribute('aria-expanded','false')};
 for(const b of document.querySelectorAll('[data-span]'))b.onclick=()=>{gestures.stop();const s=viewer.getState();if(b.dataset.span==='standard'){viewer.setRange(18000,64800);return}const span=b.dataset.span==='all'?s.max-s.min:Math.min(Number(b.dataset.span),s.max-s.min);viewer.setRange(s.start+s.span/2-span/2,span)};
@@ -97,6 +96,7 @@ window.addEventListener('resize',orient);window.addEventListener('blur',()=>gest
 document.addEventListener('visibilitychange',()=>{if(document.hidden)gestures.reset()});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&active){choose('');closePanels();gestures.stop()}});
 document.addEventListener('pointerdown',e=>{if(!$('chart-wrap').contains(e.target))gestures.stop()},{capture:true});
+document.addEventListener('click',e=>{const path=e.composedPath();if(path.includes($('chart-wrap'))||path.includes($('detail-panel'))||path.includes($('train-panel')))return;if(active&&viewer.getState().selected)choose('');},{capture:true});
 if(location.protocol==='file:')$('offline-status').textContent='単独HTMLとして通信なしで利用できます。';
 else if(!window.PWA_BUILD)$('offline-status').textContent='単独HTML版です。ファイルを保存すれば通信なしで開けます。';
 })();
