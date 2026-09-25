@@ -44,9 +44,9 @@ function orient(){
  const portrait=innerHeight>innerWidth,phone=matchMedia('(pointer:coarse)').matches||innerWidth<600;
  document.body.classList.toggle('fallback-landscape',active&&portrait&&phone);gestures?.reset();viewer?.schedule();
 }
-function enter(){active=true;$('launch-screen').hidden=true;$('app-shell').hidden=false;document.body.classList.remove('launch-waiting');orient();viewer.draw();$('chart').focus({preventScroll:true})}
-function home(){choose('');active=false;gestures.reset();closePanels();$('app-shell').hidden=true;$('launch-screen').hidden=false;document.body.classList.add('launch-waiting');orient();$('launch').focus({preventScroll:true})}
-function changeData(next){validate(next);gestures.reset();data=next;viewer.setData(data);updateMetadata();clearPrint();}
+function enter(){active=true;window.ChizuPoint.setData(data);$('launch-screen').hidden=true;$('app-shell').hidden=false;document.body.classList.remove('launch-waiting');orient();viewer.draw();$('chart').focus({preventScroll:true})}
+function home(){window.ChizuPoint.stop();window.ChizuPoint.hide();choose('');active=false;gestures.reset();closePanels();$('app-shell').hidden=true;$('launch-screen').hidden=false;document.body.classList.add('launch-waiting');orient();$('launch').focus({preventScroll:true})}
+function changeData(next){validate(next);gestures.reset();data=next;viewer.setData(data);window.ChizuPoint.setData(data);updateMetadata();clearPrint();}
 function clearPrint(){for(const v of printViewers)v.destroy();printViewers=[];}
 function printSettings(report=true){
  const parse=id=>{const raw=$(id).value.trim(),m=/^(\d{1,2}):([0-5]\d)$/.exec(raw),v=m?Number(m[1])*3600+Number(m[2])*60:NaN;return v>=0&&v<=86400?v:NaN};
